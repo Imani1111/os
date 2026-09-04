@@ -21,15 +21,12 @@ void kernel_main()
 	init_pmm();
 	init_vmm();
 	
-	uint32_t p = pmm_alloc_page();
-	uint32_t* m = (uint32_t*)vmm_map_page(0xC0000000, p, READ_WRITE);
-	uint32_t val = *m;
-		
+	uint32_t* n = my_malloc(10000);
+	*n = 0x1;
+
 	//TaskInit();
 	//SpawnTask(InitDesktop, "Desktop");
 	
-	//volatile uint32_t* unmapped_addr = (volatile uint32_t*)0x80000000;
-	//uint32_t val = *unmapped_addr;	
 
 	InitIDT();
 	InitializePIT(100);

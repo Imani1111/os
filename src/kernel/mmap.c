@@ -29,17 +29,23 @@ void init_pmm()
 			continue;
 		}
 
-		for (uint32_t page = mmap[i].base_addr; page < (mmap[i].base_addr + mmap[i].length); page += PAGE){
-			page = (page + (PAGE- 1)) & ~(PAGE - 1);
+		uint32_t page = (uint32_t)mmap[i].base_addr;
+		uint32_t size = mmap[i].length;
+		uint32_t entry_end = (uint32_t)page + size;
+		page = (page + (PAGE- 1)) & ~(PAGE - 1);
+		
+		while(page < entry_end){
 			if (page >= 0x100000 && page >= first_allocatable_addr && page < 0xFFE0000){
 				if (pmm_stack_alloc.stack_pointer < pmm_stack_alloc.capacity){
 					pmm_stack_alloc.page_addresses[pmm_stack_alloc.stack_pointer] = page;
 					pmm_stack_alloc.stack_pointer++;
 				}
 				else{
-					continue;
+					// Stack is full; stop processing memory regions
+					break;
 				}
 			}
+			page += PAGE;
 		}
 	}
 }
@@ -70,19 +76,25 @@ void* vmm_map_page(uint32_t virtual_addr, uint32_t phys_addr, uint32_t flags)
 	uint32_t pd_index = (virtual_addr >> 22) & 0x3FF;
 	uint32_t pt_index = (virtual_addr >> 12) & 0x3FF;
 
-	uint32_t pd_entry = pd.page_directory_entries[pd_index];
+	uint32_t pd_entry = boot_page_dir.page_directory_entries[pd_index];
 	uint32_t pt_phys;
 	page_table_t* pt;
 
 	if (!(pd_entry & PAGE_PRESENT)){
 		pt_phys = pmm_alloc_page();
-		pd.page_directory_entries[pd_index] = (uint32_t)pt_phys | PAGE_PRESENT | flags;
-
-		pt = (page_table_t*)(MASTER_DIR_VIRTUAL_ADDR + (pt_index << 12));
+		boot_page_dir.page_directory_entries[pd_index] = (uint32_t)pt_phys | PAGE_PRESENT | flags;
+		
+		uint32_t recursive_pt_virt = MASTER_DIR_VIRTUAL_ADDR + (pd_index << 12);
+		asm volatile("invlpg (%0)" : : "r" (recursive_pt_virt) : "memory");
+			
+		// The page directory entry index is added to the page table bits because im using 
+		// page table 1023 as the map of my whole master directory so the page table entries of 1023 
+		// are the physical addresses of the page directory entries
+		pt = (page_table_t*)(MASTER_DIR_VIRTUAL_ADDR + (pd_index << 12));
 		kmemset((void*)pt, 0, sizeof(page_table_t));
 	}
 	else{
-		pt = (page_table_t*)(pd_entry & 0xFFFFF000);
+		pt = (page_table_t*)(MASTER_DIR_VIRTUAL_ADDR + (pd_index << 12));
 	}
 	pt->page_table_entries[pt_index] = phys_addr | PAGE_PRESENT | flags;
 	asm volatile ("invlpg (%0)" : : "r" (virtual_addr) : "memory");
@@ -119,7 +131,8 @@ void init_identity_mapping()
 		fb.page_table_entries[j] = page_phys | PAGE_PRESENT | READ_WRITE;
 	}
 	boot_page_dir.page_directory_entries[pd_index] = ((uint32_t)fb.page_table_entries) | PAGE_PRESENT | READ_WRITE;
-
+	
+	/*
 	uint32_t heap_start = 0x400000;
 	uint32_t ssize = 0xFFE0000 - 0x400000;
 	uint32_t ppd_index = heap_start >> 22;
@@ -129,19 +142,11 @@ void init_identity_mapping()
 		temp_heap.page_table_entries[k] = phys_addr | PAGE_PRESENT | READ_WRITE;
 	}
 	boot_page_dir.page_directory_entries[ppd_index] = ((uint32_t)temp_heap.page_table_entries) | PAGE_PRESENT | READ_WRITE;
+	*/
 }
 
 void init_recursive_mapping(){
-	pd.page_directory_entries[1023] = (uint32_t)&pd;
-}
-
-void map_kernel(){
-	pd.page_directory_entries[0] = boot_page_dir.page_directory_entries[0];
-}
-
-void map_fb(){
-	uint32_t index = (0xfd000000 >> 22);
-	pd.page_directory_entries[index] = boot_page_dir.page_directory_entries[index];
+	boot_page_dir.page_directory_entries[1023] = (uint32_t)&boot_page_dir | PAGE_PRESENT | READ_WRITE;
 }
 
 void load_master_dir()
@@ -152,10 +157,8 @@ void load_master_dir()
 void init_vmm()
 {
 	init_identity_mapping();
-	enable_paging((uint32_t)&boot_page_dir);
-	map_kernel();
-	map_fb();
-	load_master_dir();
 	init_recursive_mapping();
+	enable_paging((uint32_t)&boot_page_dir);
+	//load_master_dir();
 }
 
