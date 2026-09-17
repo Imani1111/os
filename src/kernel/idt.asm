@@ -7,26 +7,36 @@ global isr32
 extern PITInterruptHandler
 extern Schedule
 
+global isr13
+extern gp_fault
+
 LoadIDT:
 	mov eax, [esp + 4]
 	lidt[eax]
 	ret
 
+isr13:
+	cli
+	pushad
+	call gp_fault
+	popad
+	add esp, 4
+	iret
 	
 isr32:
-	pusha
+	cli
+	pushad
 	call PITInterruptHandler
-	
 	push esp
 	call Schedule
 	add esp, 4
 	mov esp, eax
-	
-	popa
+	popad
 	iret
 
 isr33:
-	pusha
+	cli
+	pushad
 	call HandleKeyboardInterrupt
-	popa
+	popad
 	iret

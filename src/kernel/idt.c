@@ -1,10 +1,12 @@
 #include <idt.h>
 #include <keyboard.h>
+#include <screen.h>
 
 IDTEntry_t idt[IDT_ENTRIES];
 IDTPtr_t idt_addr;
 
 extern void LoadIDT(uint32_t idtptr);
+extern void isr13();
 extern void isr32();
 extern void isr33();
 
@@ -69,22 +71,15 @@ void CreateIDTEntry(IDTEntry_t* table, uint32_t israddr, uint16_t segselector, u
 	table->israddr_high = (israddr >> 16) & 0xFFFF;
 }
 
-void InterruptHandler(uint32_t irqno, uint32_t err_code)
+void gp_fault()
 {
-	(void)err_code;
-	switch(irqno){
-		case 33: {
-				 HandleKeyboardInterrupt();
-				 break;
-			 }
-		default: {
-				 break;
-			 }
+	clear_screen(0x00ff0000);
+	while (1){
+		asm volatile("cli; hlt");
 	}
-	PIC_sendEOI(irqno);
 }
 
-void InitIDT(){
+void init_idt(){
 	idt_addr.limit = (sizeof(IDTEntry_t) * IDT_ENTRIES) - 1;
 	idt_addr.idtaddr = (uint32_t)&idt;
 
@@ -92,6 +87,7 @@ void InitIDT(){
 		CreateIDTEntry(&idt[i], 0, 0, 0);
 	}
 	
+	CreateIDTEntry(&idt[13], (uint32_t)isr13, GDT_CODE_SEGMENT, IDT_FLAG_INTERRUPT_GATE);	
 	CreateIDTEntry(&idt[33], (uint32_t)isr33, GDT_CODE_SEGMENT, IDT_FLAG_INTERRUPT_GATE);
 	CreateIDTEntry(&idt[32], (uint32_t)isr32, GDT_CODE_SEGMENT, IDT_FLAG_INTERRUPT_GATE);
 

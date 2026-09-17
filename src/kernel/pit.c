@@ -4,7 +4,7 @@
 
 uint32_t pit_ticks = 0;
 
-void InitializePIT(uint32_t preferred_freq)
+void init_pit(uint32_t preferred_freq)
 {
 	uint16_t divisor = PIT_FREQUENCY / preferred_freq;
 	send_byte_to_port(0x43, 0x36);

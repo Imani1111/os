@@ -9,6 +9,7 @@ typedef unsigned long long uint64_t;
 #include <stddef.h>
 
 #define TASK_STACK_SPACE 4096
+#define BOOT_STACK_BASE 0x200000
 #define EFLAGS 0x202
 
 typedef enum {
@@ -35,7 +36,7 @@ extern TaskControlBlock_t* current_task;
 
 extern int next_pid;
 
-void TaskInit(void);
+void init_multitasking(void);
 TaskControlBlock_t* SpawnTask(void(*entry_function)(void), const char* name);
 uint32_t Schedule(uint32_t current_esp);
 void KillTask(TaskControlBlock_t* task);

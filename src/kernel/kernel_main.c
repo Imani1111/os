@@ -10,26 +10,37 @@
 #include <shell.h>
 #include <fs.h>
 #include <mmap.h>
+#include <rtc.h>
 
 extern uint32_t first_allocatable_addr;
 void kernel_main()
 {
 	asm volatile("cli");
-	clear_screen(0x00000000);
+	clear_screen(0x00ffffff);
 	set_cursor_bounds(0, 640, 0, 480);
-	Init_fs();
+		
+	init_fs();
 	init_pmm();
 	init_vmm();
+		
+	read_rtc();
+	realtime_t* time = get_current_timestamp();
+	char disp[20];
+	format_time(time, disp);	
+	print_string(disp, 0xff);
+	print_string("\n\n", 0);	
 	
-	uint32_t* n = my_malloc(10000);
-	*n = 0x1;
+	create_entry("Projects", ATTR_DIRECTORY);
 
-	//TaskInit();
+	inode_t* i = resolve_path("./Projects");
+	char buf[5];
+	itoa(i->inode_no, buf);
+	print_string(buf, 0x00ff);
+	//init_multitasking();
 	//SpawnTask(InitDesktop, "Desktop");
-	
-
-	InitIDT();
-	InitializePIT(100);
+		
+	init_pit(100);
+	init_idt();
 	send_byte_to_port(0x21, 0b11111100); // Unmask PIT(bit 0) and Keyboard(bit 1)
 	
 	while(1);

@@ -8,7 +8,7 @@ typedef unsigned long long uint64_t;
 
 #define PIT_FREQUENCY 1193180
 
-void InitializePIT(uint32_t preferred_freq);
+void init_pit(uint32_t preferred_freq);
 void PITInterruptHandler(void);
 
 

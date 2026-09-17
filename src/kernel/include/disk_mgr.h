@@ -16,12 +16,15 @@ typedef unsigned long long uint64_t;
 #define COMMAND_PORT 0x1F7
 
 #define MASTER_DRIVE_MODE 0xE0
+#define SLAVE_DRIVE_MODE 0xF0
 #define READ_FUNC 0x20
 #define WRITE_FUNC 0x30
 
 #define FLUSH_CACHE 0xE7
 
-int disk_read_sector(uint32_t lba, uint8_t* ram_buffer);
-int disk_write_sector(uint32_t lba, uint8_t* ram_buffer);
+int dskrs1(uint32_t lba, uint8_t* b);
+int dskws1(uint32_t lba, uint8_t* b);
+int dskrs2(uint32_t lba, uint8_t* b);
+int dskws2(uint32_t lba, uint8_t* b);
 
 #endif

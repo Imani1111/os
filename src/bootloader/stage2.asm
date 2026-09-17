@@ -99,17 +99,9 @@ get_memory_map:
 	jmp $	
 
 readKernel:
-	mov ax, 0x5000
-	mov es, ax
-	xor bx, bx
-
-	mov ah, 0x02
-	mov al, 32
-	mov ch, 0
-	mov cl, 14
-	mov dh, 1
+	mov ah, 0x42
 	mov dl, [stage2boot_drive]
-	
+	mov si, dap
 	int 0x13
 	jc .read_error
 
@@ -147,7 +139,7 @@ init32mode:
 MoveKernelto0x100000:
 	mov esi, 0x50000
 	mov edi, 0x100000
-	mov ecx, 4096
+	mov ecx, 8192
 	
 	cld
 	rep movsd
@@ -160,6 +152,15 @@ print:
 	cmp al, 0
 	jne print
 	ret
+
+;Disk Address Packet
+dap:
+	db 0x10
+	db 0
+	dw 64
+	dw 0x0000
+	dw 0x5000
+	dq 10
 
 GdtStart:
 	dd 0x0, 0x0

@@ -6,7 +6,7 @@ static HeapBlockMetaData* heap_start = NULL;
 static HeapBlockMetaData* heap_tail = NULL;
 extern uint32_t first_allocatable_addr;
 HeapBlockMetaData* heap_pointer = NULL;
-uint32_t heap_current = 0x400000;
+uint32_t heap_current = HEAP_START;
 
 // TODO: Fix malloc page fault when a big chunk is requested when i wake up
 void* my_malloc(uint32_t size)
@@ -17,9 +17,9 @@ void* my_malloc(uint32_t size)
 	if (heap_start == NULL){
 		heap_start = (HeapBlockMetaData*)sbrk(PAGE);
 		heap_start->size = PAGE - sizeof(HeapBlockMetaData);
-		heap_start->is_free = 1;
-		heap_start->next = NULL;
-		heap_start->prev = NULL;
+		heap_start->is_free = BLOCK_FREE;
+		heap_start->next = heap_start;
+		heap_start->prev = heap_start;
 
 		heap_tail = heap_start;
 		heap_pointer = heap_start;
@@ -27,26 +27,20 @@ void* my_malloc(uint32_t size)
 
 	HeapBlockMetaData* curr = heap_pointer;
 	do {
-		if (curr->is_free && curr->size >= aligned){
+		if (curr->is_free && (curr->size >= aligned + sizeof(HeapBlockMetaData))){
 			HeapBlockMetaData* new = (HeapBlockMetaData*)((uint8_t*)curr + aligned + sizeof(HeapBlockMetaData));
 			new->size = curr->size - aligned - sizeof(HeapBlockMetaData);
-			new->is_free = 1;
-
-			// TODO: Implement heap_tail logic
-			if (curr->next == NULL){
-				new->next = NULL;
-				heap_tail = new;
-			}else{
-				new->next = curr->next;
-				curr->next->prev = new;
-			}
+			new->is_free = BLOCK_FREE;
+			
+			new->next = curr->next;
+			if (new->next == heap_start) heap_tail = new;		
 			new->prev = curr;
 			
 			curr->next = new;
 			curr->size = aligned;
-			curr->is_free = 0;
+			curr->is_free = BLOCK_OCCUPIED;
 
-			heap_pointer = curr;
+			heap_pointer = new;
 
 			void* ptr = (uint8_t*)curr + sizeof(HeapBlockMetaData);
 			return ptr;
@@ -55,9 +49,8 @@ void* my_malloc(uint32_t size)
 	}while (curr != heap_pointer);
 
 	//TODO: Implement heap expansion using sbrk when no block fits
-	if ( heap_tail->is_free){
+	if (heap_tail->is_free){
 		uint32_t no_of_pages = ((aligned - heap_tail->size) + PAGE - 1) / PAGE;
-		print_hex(no_of_pages, 0, 40);
 		
 		for (uint32_t i = 0; i < no_of_pages; i++){
 			void* ptr = sbrk(PAGE);
@@ -66,34 +59,49 @@ void* my_malloc(uint32_t size)
 		}
 		
 	}else{
-		uint32_t no_of_pages = ((aligned + sizeof(HeapBlockMetaData)) + PAGE - 1) / PAGE;
-		print_hex(no_of_pages, 0, 40);
-		
+		uint32_t no_of_pages = ((aligned + sizeof(HeapBlockMetaData)) + PAGE - 1) / PAGE;	
 		HeapBlockMetaData* expansion = NULL;
 		
 		for (uint32_t i = 0; i < no_of_pages; i++){
-			if (expansion == NULL){
-				expansion = (HeapBlockMetaData*)sbrk(PAGE);
-				if (expansion == SBRK_FAIL) return NULL;
-				
-				expansion->next = NULL;
-				expansion->prev = heap_tail;
-				heap_tail->next = expansion;
-				expansion->size = PAGE - sizeof(HeapBlockMetaData);
-				expansion->is_free = 1;
-			}
-			else{
-				void* ptr = sbrk(PAGE);
-				if (ptr == SBRK_FAIL) return NULL;
-				expansion->size += PAGE;
-			}
+			void* ptr = sbrk(PAGE);
+			if (ptr == SBRK_FAIL) return NULL;
 		}
+		expansion = (HeapBlockMetaData*)((uint8_t*)heap_tail + sizeof(HeapBlockMetaData) + heap_tail->size);
+		expansion->size = (no_of_pages * PAGE) - sizeof(HeapBlockMetaData);
+		expansion->is_free = BLOCK_FREE;
+		expansion->next = heap_start;
+		expansion->prev = heap_tail;
+		heap_start->prev = expansion;
+		heap_tail = expansion;
 	}
 	return my_malloc(aligned);
 }
 
 void my_free(void* ptr)
 {
+	if (!ptr) return;
+		
+	HeapBlockMetaData* block = (HeapBlockMetaData*)((uint8_t*)ptr - sizeof(HeapBlockMetaData));
+	if ((uint32_t)block < HEAP_START || (uint32_t)block > HEAP_END) return; // Out of bound ram address detected!
+	if (block->is_free) return; // Double free detected!
+	
+	block->is_free = BLOCK_FREE;
+	
+	if (block->next != heap_start && block->next->is_free){
+		print_string("\nYES!\n", 0x00ff0000);
+		block->size += block->next->size + sizeof(HeapBlockMetaData);
+		block->next = block->next->next;
+		block->next->prev = block;
+
+		heap_pointer = block;
+	}
+	if (block->prev != heap_tail && block->prev->is_free){
+		heap_pointer = block->prev;
+		block->prev->size += block->size + sizeof(HeapBlockMetaData);
+		block->prev->next = block->next;
+		block->next->prev = block->prev;
+	}
+	print_string("Free!\n", 0x0000ff00);
 }
 
 void* sbrk(int32_t increment)

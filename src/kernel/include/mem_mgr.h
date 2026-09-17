@@ -9,7 +9,11 @@ typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 typedef signed int int32_t;
 
+#define BLOCK_FREE 1
+#define BLOCK_OCCUPIED 0
 #define SBRK_FAIL ((void*)-1)
+#define HEAP_START 0x400000
+#define HEAP_END 0xFFE0000
 
 typedef struct HeapBlock{
 	uint32_t size;

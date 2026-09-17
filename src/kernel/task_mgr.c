@@ -16,7 +16,7 @@ void kernel_idle_loop(){
 }
 
 
-void TaskInit()
+void init_multitasking()
 {
 	TaskControlBlock_t* kernel_task = (TaskControlBlock_t*)my_malloc(sizeof(TaskControlBlock_t));
 	if (kernel_task == NULL){

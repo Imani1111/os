@@ -39,3 +39,65 @@ void* kmemset(void* dest, uint8_t val, int count)
 	}
 	return ret;
 }
+
+uint32_t kstrlen(char* s)
+{
+	uint32_t c = 0;
+	while(*s++){
+		c++;	
+	}
+	return c;
+}
+
+void itoa(int no, char* buffer)
+{
+	int i = 0;
+	int is_negative = 0;
+
+	if (no == 0){
+		buffer[i++] = '0';
+		buffer[i] = '\0';
+		return;
+	}
+	if (no < 0){
+		is_negative = 1;
+		no = -no;
+	}
+	while (no != 0){
+		int t = no % 10;
+		buffer[i++] = t + '0';
+		no = no / 10;
+	}
+	if (is_negative) buffer[i++] = '-';
+	int start = 0;
+	int end = i - 1;
+	while(start < end){
+		char s = buffer[start];
+		buffer[start] = buffer[end];
+		buffer[end] = s;
+		start++;
+		end--;
+	}
+	buffer[i] = '\0';
+}
+
+int kstrtok(char delim, char* str, char** token_arr, int token_count)
+{
+	char p[256] = {0};
+	kmemcpy(p, str, kstrlen(str));
+	int tc = 0;
+	char* ptr = p;
+	if (*ptr == '\0') return -1;
+	while (*ptr == delim) ptr++;
+	while (*ptr && (tc < token_count)){
+		token_arr[tc++] = ptr;
+		while (*ptr && *ptr != delim){
+			ptr++;
+		}
+		if (*ptr == delim){
+			*ptr = '\0';
+			ptr++;
+		}
+	}
+	return tc;
+}

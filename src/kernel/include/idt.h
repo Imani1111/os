@@ -41,7 +41,7 @@ uint8_t read_byte_from_port(uint16_t port);
 uint16_t read_word_from_port(uint16_t port);
 void send_word_to_port(uint16_t port, uint16_t val);
 void CreateIDTEntry(IDTEntry_t* idt, uint32_t idtaddr, uint16_t segselector, uint8_t flags);
-void InitIDT(void);
+void init_idt(void);
 void PIC_sendEOI(uint8_t irqno);
 
 #endif

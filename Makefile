@@ -1,7 +1,7 @@
 ASM = nasm
-QEMU = qemu-system-i386 -machine pc,max-ram-below-4g=1G -vga std -d int -no-reboot -hda $(TARGET) -m 1G
+QEMU = qemu-system-i386 -vga std -d int -no-reboot -no-shutdown -hda $(TARGET) -hdb $(FS)
 CC = i686-elf-gcc
-CFLAGS =  -m32 -ffreestanding -nostdlib -fno-pie -fno-pic -fomit-frame-pointer -fno-builtin -fno-stack-protector -Wall -Wextra -mno-mmx -mno-sse -I$(INCLUDE_DIR)
+CFLAGS =  -m32 -ffreestanding -O0 -g -nostdlib -fno-pie -fno-pic -fomit-frame-pointer -fno-builtin -fno-stack-protector -Wall -Wextra -mno-mmx -mno-sse -I$(INCLUDE_DIR)
 LD = i686-elf-ld 
 MYLINKER = linker.ld
 LDFLAGS = -m elf_i386 -T $(MYLINKER)
@@ -63,15 +63,22 @@ FS_OBJ = $(BUILD_DIR)/fs.o
 MMAP_C = $(KERNEL_DIR)/mmap.c
 MMAP_OBJ = $(BUILD_DIR)/mmap.o
 
-BUILD_FS = $(TOOLS_DIR)/build_fs
+RTC_C = $(KERNEL_DIR)/rtc.c
+RTC_OBJ = $(BUILD_DIR)/rtc.o
 
-SB = $(TOOLS_DIR)/superblock.bin
-DT = $(TOOLS_DIR)/directory.bin
-BM = $(TOOLS_DIR)/bitmap.bin
+BUILD_FS = $(TOOLS_DIR)/buildfs
 
+SB = $(TOOLS_DIR)/sb.bin
+ITBM= $(TOOLS_DIR)/itbm.bin
+SBM = $(TOOLS_DIR)/sbm.bin
+IT = $(TOOLS_DIR)/inodet.bin
+ROOT = $(TOOLS_DIR)/root.bin
+
+KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 
 OS_IMG = $(BUILD_DIR)/os.img
+FS = fs.img
 
 TARGET = $(OS_IMG)
 
@@ -87,7 +94,7 @@ $(STAGE2_BIN): $(STAGE2_SRC)
 	$(ASM) -f bin $(STAGE2_SRC) -o $(STAGE2_BIN)
 
 $(KERNEL_ENTRY_OBJ): $(KERNEL_ENTRY_SRC)
-	$(ASM) -f elf32 $(KERNEL_ENTRY_SRC) -o $(KERNEL_ENTRY_OBJ)
+	$(ASM) -f elf32 -g -F dwarf $(KERNEL_ENTRY_SRC) -o $(KERNEL_ENTRY_OBJ)
 
 $(KERNEL_OBJ_MAIN): $(KERNEL_C_MAIN)
 	$(CC) $(CFLAGS) -c $(KERNEL_C_MAIN) -o $(KERNEL_OBJ_MAIN)
@@ -96,7 +103,7 @@ $(SCREEN_OBJ): $(SCREEN_C)
 	$(CC) $(CFLAGS) -c $(SCREEN_C) -o $(SCREEN_OBJ)
 
 $(IDTASM_OBJ): $(IDT_ASM)
-	$(ASM) -f elf32 $(IDT_ASM) -o $(IDTASM_OBJ)
+	$(ASM) -f elf32 -g -F dwarf $(IDT_ASM) -o $(IDTASM_OBJ)
 
 $(IDTC_OBJ): $(IDT_C)
 	$(CC) $(CFLAGS) -c $(IDT_C) -o $(IDTC_OBJ)
@@ -131,22 +138,29 @@ $(FS_OBJ): $(FS_C)
 $(MMAP_OBJ): $(MMAP_C)
 	$(CC) $(CFLAGS) -c $(MMAP_C) -o $(MMAP_OBJ)
 
-$(KERNEL_BIN): $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJ_MAIN) $(SCREEN_OBJ) $(IDTC_OBJ) $(IDTASM_OBJ) $(KEYBOARD_OBJ) $(PIT_OBJ) $(UI_OBJ) $(MEM_MGR_OBJ) $(TASK_MGR_OBJ) $(STRING_OBJ) $(DISK_MGR_OBJ) $(SHELL_OBJ) $(FS_OBJ) $(MMAP_OBJ) $(MYLINKER)
-	$(LD) $(LDFLAGS) $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJ_MAIN) $(SCREEN_OBJ) $(IDTC_OBJ) $(IDTASM_OBJ) $(KEYBOARD_OBJ) $(PIT_OBJ) $(UI_OBJ) $(MEM_MGR_OBJ) $(TASK_MGR_OBJ) $(STRING_OBJ) $(DISK_MGR_OBJ) $(SHELL_OBJ) $(FS_OBJ) $(MMAP_OBJ) -o $(KERNEL_BIN)
+$(RTC_OBJ): $(RTC_C)
+	$(CC) $(CFLAGS) -c $(RTC_C) -o $(RTC_OBJ)
+
+$(KERNEL_ELF): $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJ_MAIN) $(SCREEN_OBJ) $(IDTC_OBJ) $(IDTASM_OBJ) $(KEYBOARD_OBJ) $(PIT_OBJ) $(UI_OBJ) $(MEM_MGR_OBJ) $(TASK_MGR_OBJ) $(STRING_OBJ) $(DISK_MGR_OBJ) $(SHELL_OBJ) $(FS_OBJ) $(MMAP_OBJ) $(RTC_OBJ) $(MYLINKER)
+	$(LD) $(LDFLAGS) $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJ_MAIN) $(SCREEN_OBJ) $(IDTC_OBJ) $(IDTASM_OBJ) $(KEYBOARD_OBJ) $(PIT_OBJ) $(UI_OBJ) $(MEM_MGR_OBJ) $(TASK_MGR_OBJ) $(STRING_OBJ) $(DISK_MGR_OBJ) $(SHELL_OBJ) $(FS_OBJ) $(MMAP_OBJ) $(RTC_OBJ) -o $(KERNEL_ELF)
+
+$(KERNEL_BIN): $(KERNEL_ELF)
+	objcopy -O binary $(KERNEL_ELF) $(KERNEL_BIN)
 
 $(OS_IMG): $(STAGE1_BIN) $(STAGE2_BIN) $(KERNEL_BIN)
-	dd if=/dev/zero of=$(OS_IMG) bs=512 count=20480
+	dd if=/dev/zero of=$(OS_IMG) bs=512 count=2880
 	dd if=$(STAGE1_BIN) of=$(OS_IMG) bs=512 conv=notrunc seek=0
 	dd if=$(STAGE2_BIN) of=$(OS_IMG) bs=512 conv=notrunc seek=1
-	dd if=$(SB) of=$(OS_IMG) bs=512 count=1 conv=notrunc seek=10
-	dd if=$(DT) of=$(OS_IMG) bs=512 count=64 seek=11 conv=notrunc
-	dd if=$(BM) of=$(OS_IMG) bs=512 conv=notrunc seek=75
-	dd if=$(KERNEL_BIN) of=$(OS_IMG) bs=512 conv=notrunc seek=76
-	
-	# ==> Final os img constructed successfully!
+	dd if=$(KERNEL_BIN) of=$(OS_IMG) bs=512 conv=notrunc seek=10 
+	echo "==> Final os img constructed successfully!"
 
 fs:
-	./$(BUILD_FS)
+	dd if=/dev/zero of=$(FS) bs=1M count=10
+	dd if=$(SB) of=$(FS) bs=512 conv=notrunc seek=0
+	dd if=$(IT) of=$(FS) bs=512 conv=notrunc seek=1
+	dd if=$(SBM) of=$(FS) bs=512 conv=notrunc seek=131
+	dd if=$(ITBM) of=$(FS) bs=512 conv=notrunc seek=135
+	dd if=$(ROOT) of=$(FS) bs=512 conv=notrunc seek=137
 
 run:
 	$(QEMU)
